@@ -17,6 +17,7 @@ type Handler struct {
 func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/user/{nickname}/profile", controllers.GetUser).Methods("GET")
+	r.HandleFunc("/user/{nickname}/create", controllers.CreateUser).Methods("POST")
 
 	h := Handler{
 		Router: r,

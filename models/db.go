@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/lib/pq" // postgres driver
+	// пустой импорт для работы с бд
+	_ "github.com/lib/pq"
 )
 
 var db *sql.DB

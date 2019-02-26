@@ -18,7 +18,11 @@ func NewError(code int, descr, msg string) *Error {
 
 const (
 	// InternalDatabase неизвестная ошибка базы данных
-	InternalDatabase = 100 + iota
+	InternalDatabase = 700 + iota
 	// RowNotFound запись в БД не найдена
 	RowNotFound
+	// ValidationFailed объект не прошел валидацию
+	ValidationFailed
+	// RowDuplication юзер с таким именем или почтой уже существует
+	RowDuplication
 )
