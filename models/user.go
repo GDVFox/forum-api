@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+
+	"github.com/lib/pq"
 )
 
 // User информация о пользователе
@@ -13,6 +15,13 @@ type User struct {
 	Fullname string `json:"fullname"`
 	About    string `json:"about"`
 	Email    string `json:"email"`
+}
+
+// UpdateUserFields структура для обновления полей юзера
+type UpdateUserFields struct {
+	Fullname *string `json:"fullname"`
+	About    *string `json:"about"`
+	Email    *string `json:"email"`
 }
 
 // Users несколько юзеров
@@ -65,6 +74,44 @@ func (u *User) Create() (Users, *Error) {
 	return nil, nil
 }
 
+// Save сохраняет user с новыми полями
+func (u *User) Save() *Error {
+	if u.ID == 0 {
+		return NewError(ValidationFailed, "ID must be setted", "")
+	}
+
+	if !u.Validate() {
+		return NewError(ValidationFailed, "validation failed", "")
+	}
+
+	// возможно далее указывать в запросе не все поля
+	_, err := db.Exec(`UPDATE users SET (nickname, fullname, about, email) = ($1, $2, $3, $4) WHERE id = $5`,
+		u.Nickname, u.Fullname, u.About, u.Email, u.ID)
+
+	if pgerr, ok := err.(*pq.Error); ok {
+		var code int
+		if pgerr.Code == "23505" {
+			code = RowDuplication
+		} else {
+			code = InternalDatabase
+
+		}
+		return NewError(code, pgerr.Error(), "")
+	}
+
+	return nil
+}
+
+// GetUserByNickname получение информации о пользователе форума по егsо имени.
+func GetUserByNickname(nickname string) (*User, *Error) {
+	return getUserBy("nickname", nickname)
+}
+
+// GetUserByEmail получение информации о пользователе форума по егsо email.
+func GetUserByEmail(email string) (*User, *Error) {
+	return getUserBy("email", email)
+}
+
 func (u *User) getDuplicates() Users {
 	usedUsers := make([]*User, 0)
 
@@ -103,14 +150,4 @@ func getUserBy(by, value string) (*User, *Error) {
 		&user.Fullname, &user.About, &user.Email)
 
 	return user, nil
-}
-
-// GetUserByNickname получение информации о пользователе форума по егsо имени.
-func GetUserByNickname(nickname string) (*User, *Error) {
-	return getUserBy("nickname", nickname)
-}
-
-// GetUserByEmail получение информации о пользователе форума по егsо email.
-func GetUserByEmail(email string) (*User, *Error) {
-	return getUserBy("email", email)
 }

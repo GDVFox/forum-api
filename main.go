@@ -18,6 +18,7 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/user/{nickname}/profile", controllers.GetUser).Methods("GET")
 	r.HandleFunc("/user/{nickname}/create", controllers.CreateUser).Methods("POST")
+	r.HandleFunc("/user/{nickname}/profile", controllers.UpdateUser).Methods("POST")
 
 	h := Handler{
 		Router: r,

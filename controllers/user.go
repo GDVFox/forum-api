@@ -64,3 +64,58 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteEasyjson(w, http.StatusCreated, newUser)
 }
+
+// UpdateUser изменение информации в профиле пользователя.
+func UpdateUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	updateFields := &models.UpdateUserFields{}
+	jsonErr := utils.DecodeEasyjson(r.Body, updateFields)
+	if jsonErr != nil {
+		utils.WriteEasyjson(w, http.StatusBadRequest, &models.Error{
+			Message: "unable to decode request body;",
+		})
+		return
+	}
+
+	user, err := models.GetUserByNickname(vars["nickname"])
+	if err != nil {
+		var code int
+		if err.Code == models.InternalDatabase {
+			code = http.StatusInternalServerError
+			err.Message = "internal database error"
+		} else if err.Code == models.RowNotFound {
+			code = http.StatusNotFound
+			err.Message = "Can't find user with that nickname"
+		}
+
+		utils.WriteEasyjson(w, code, err)
+		return
+	}
+
+	if updateFields.Fullname != nil {
+		user.Fullname = *updateFields.Fullname
+	}
+	if updateFields.About != nil {
+		user.About = *updateFields.About
+	}
+	if updateFields.Email != nil {
+		user.Email = *updateFields.Email
+	}
+
+	err = user.Save()
+	if err != nil {
+		var code int
+		if err.Code == models.InternalDatabase {
+			code = http.StatusInternalServerError
+			err.Message = "internal database error"
+		} else if err.Code == models.RowDuplication {
+			code = http.StatusConflict
+			err.Message = "row this that email exitst"
+		}
+
+		utils.WriteEasyjson(w, code, err)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, user)
+}

@@ -203,3 +203,134 @@ func (v *User) UnmarshalJSON(data []byte) error {
 func (v *User) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson9e1087fdDecodeForumApiModels1(l, v)
 }
+func easyjson9e1087fdDecodeForumApiModels2(in *jlexer.Lexer, out *UpdateUserFields) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeString()
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "fullname":
+			if in.IsNull() {
+				in.Skip()
+				out.Fullname = nil
+			} else {
+				if out.Fullname == nil {
+					out.Fullname = new(string)
+				}
+				*out.Fullname = string(in.String())
+			}
+		case "about":
+			if in.IsNull() {
+				in.Skip()
+				out.About = nil
+			} else {
+				if out.About == nil {
+					out.About = new(string)
+				}
+				*out.About = string(in.String())
+			}
+		case "email":
+			if in.IsNull() {
+				in.Skip()
+				out.Email = nil
+			} else {
+				if out.Email == nil {
+					out.Email = new(string)
+				}
+				*out.Email = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson9e1087fdEncodeForumApiModels2(out *jwriter.Writer, in UpdateUserFields) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"fullname\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		if in.Fullname == nil {
+			out.RawString("null")
+		} else {
+			out.String(string(*in.Fullname))
+		}
+	}
+	{
+		const prefix string = ",\"about\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		if in.About == nil {
+			out.RawString("null")
+		} else {
+			out.String(string(*in.About))
+		}
+	}
+	{
+		const prefix string = ",\"email\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		if in.Email == nil {
+			out.RawString("null")
+		} else {
+			out.String(string(*in.Email))
+		}
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v UpdateUserFields) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson9e1087fdEncodeForumApiModels2(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v UpdateUserFields) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson9e1087fdEncodeForumApiModels2(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *UpdateUserFields) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson9e1087fdDecodeForumApiModels2(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *UpdateUserFields) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson9e1087fdDecodeForumApiModels2(l, v)
+}
