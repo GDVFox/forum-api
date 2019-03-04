@@ -2,6 +2,7 @@ package main
 
 import (
 	"forum-api/controllers"
+	"forum-api/models"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,11 @@ type Handler struct {
 }
 
 func main() {
+	connectError := models.ConnetctDB("forum_db_user", "qwerty", "localhost", "forum_db")
+	if connectError != nil {
+		log.Fatalf("cant open database connection: %s", connectError.Message)
+	}
+
 	r := mux.NewRouter()
 	r.HandleFunc("/user/{nickname}/profile", controllers.GetUser).Methods("GET")
 	r.HandleFunc("/user/{nickname}/create", controllers.CreateUser).Methods("POST")

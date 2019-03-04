@@ -9,6 +9,7 @@ import (
 )
 
 // User информация о пользователе
+//easyjson:json
 type User struct {
 	ID       int64  `json:"-"`
 	Nickname string `json:"nickname"`
@@ -18,6 +19,7 @@ type User struct {
 }
 
 // UpdateUserFields структура для обновления полей юзера
+//easyjson:json
 type UpdateUserFields struct {
 	Fullname *string `json:"fullname"`
 	About    *string `json:"about"`
@@ -47,28 +49,33 @@ func init() {
 }
 
 // Validate проверка полей
-func (u *User) Validate() bool {
-	return nicknameRegexp.MatchString(u.Nickname) &&
+func (u *User) Validate() (Users, *Error) {
+	if !(nicknameRegexp.MatchString(u.Nickname) &&
 		emailRegexp.MatchString(u.Email) &&
-		u.Fullname != ""
+		u.Fullname != "") {
+		return nil, NewError(ValidationFailed, "validation failed")
+	}
+
+	// валдация на повторы
+	usedUsers := getDuplicates(u.Nickname, u.Email)
+	if usedUsers != nil {
+		return usedUsers, NewError(RowDuplication, "email or nickname are already used!")
+	}
+
+	return nil, nil
 }
 
 // Create создание нового пользователя в базе данных
 func (u *User) Create() (Users, *Error) {
-	if !u.Validate() {
-		return nil, NewError(ValidationFailed, "validation failed", "")
-	}
-
-	usedUsers := u.getDuplicates()
-	if usedUsers != nil {
-		return usedUsers, NewError(RowDuplication, "email or nickname are already used!", "")
+	if used, validateError := u.Validate(); validateError != nil {
+		return used, validateError
 	}
 
 	_, err := db.Exec(`INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4)`,
 		u.Nickname, u.Fullname, u.About, u.Email)
 
 	if err != nil {
-		return nil, NewError(InternalDatabase, err.Error(), "")
+		return nil, NewError(InternalDatabase, err.Error())
 	}
 
 	return nil, nil
@@ -77,26 +84,22 @@ func (u *User) Create() (Users, *Error) {
 // Save сохраняет user с новыми полями
 func (u *User) Save() *Error {
 	if u.ID == 0 {
-		return NewError(ValidationFailed, "ID must be setted", "")
+		return NewError(ValidationFailed, "ID must be setted")
 	}
 
-	if !u.Validate() {
-		return NewError(ValidationFailed, "validation failed", "")
+	if _, err := u.Validate(); err != nil {
+		return err
 	}
 
 	// возможно далее указывать в запросе не все поля
 	_, err := db.Exec(`UPDATE users SET (nickname, fullname, about, email) = ($1, $2, $3, $4) WHERE id = $5`,
 		u.Nickname, u.Fullname, u.About, u.Email, u.ID)
-
-	if pgerr, ok := err.(*pq.Error); ok {
-		var code int
-		if pgerr.Code == "23505" {
-			code = RowDuplication
-		} else {
-			code = InternalDatabase
-
+	if err != nil {
+		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23505" {
+			return NewError(RowDuplication, pgerr.Error())
 		}
-		return NewError(code, pgerr.Error(), "")
+
+		return NewError(InternalDatabase, "internal")
 	}
 
 	return nil
@@ -112,16 +115,16 @@ func GetUserByEmail(email string) (*User, *Error) {
 	return getUserBy("email", email)
 }
 
-func (u *User) getDuplicates() Users {
+func getDuplicates(nickname, email string) Users {
 	usedUsers := make([]*User, 0)
 
-	dupNickname, _ := GetUserByNickname(u.Nickname)
+	dupNickname, _ := GetUserByNickname(nickname)
 	if dupNickname != nil {
 		usedUsers = append(usedUsers, dupNickname)
 	}
 
-	dupEmail, _ := GetUserByEmail(u.Email)
-	if dupEmail != nil && dupEmail.ID != dupNickname.ID {
+	dupEmail, _ := GetUserByEmail(email)
+	if dupEmail != nil && (dupNickname == nil || dupEmail.ID != dupNickname.ID) {
 		usedUsers = append(usedUsers, dupEmail)
 	}
 
@@ -136,11 +139,11 @@ func getUserBy(by, value string) (*User, *Error) {
 	// спринтф затратно, потом надо это ускорить
 	rows, err := db.Query(fmt.Sprintf(`SELECT * FROM users WHERE %s = $1`, by), value)
 	if err != nil {
-		return nil, NewError(InternalDatabase, err.Error(), "")
+		return nil, NewError(InternalDatabase, err.Error())
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		return nil, NewError(RowNotFound, "row does not found", "")
+		return nil, NewError(RowNotFound, "row does not found")
 	}
 
 	// пока что самый простой подход,

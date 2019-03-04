@@ -2,17 +2,15 @@ package models
 
 // Error объект для удобства обработки ошибок
 type Error struct {
-	Code        int    `json:"-"`
-	Message     string `json:"message"`
-	Description string `json:"-"`
+	Code    int    `json:"-"`
+	Message string `json:"message"`
 }
 
 // NewError создаёт новый объект ошибки
-func NewError(code int, descr, msg string) *Error {
+func NewError(code int, msg string) *Error {
 	return &Error{
-		Code:        code,
-		Description: descr,
-		Message:     msg,
+		Code:    code,
+		Message: msg,
 	}
 }
 
