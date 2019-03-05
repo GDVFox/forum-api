@@ -16,10 +16,8 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 		var code int
 		if err.Code == models.InternalDatabase {
 			code = http.StatusInternalServerError
-			err.Message = "internal database error"
 		} else if err.Code == models.RowNotFound {
 			code = http.StatusNotFound
-			err.Message = "Can't find user with that nickname"
 		}
 
 		utils.WriteEasyjson(w, code, err)
@@ -52,10 +50,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		var code int
 		if errs.Code == models.ValidationFailed {
 			code = http.StatusBadRequest
-			errs.Message = "Validation faild"
 		} else {
 			code = http.StatusInternalServerError
-			errs.Message = "internal server error"
 		}
 
 		utils.WriteEasyjson(w, code, errs)
@@ -82,10 +78,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		var code int
 		if err.Code == models.InternalDatabase {
 			code = http.StatusInternalServerError
-			err.Message = "internal database error"
 		} else if err.Code == models.RowNotFound {
 			code = http.StatusNotFound
-			err.Message = "Can't find user with that nickname"
 		}
 
 		utils.WriteEasyjson(w, code, err)
@@ -107,10 +101,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		var code int
 		if err.Code == models.InternalDatabase {
 			code = http.StatusInternalServerError
-			err.Message = "internal database error"
 		} else if err.Code == models.RowDuplication {
 			code = http.StatusConflict
-			err.Message = "row this that email exitst"
 		}
 
 		utils.WriteEasyjson(w, code, err)

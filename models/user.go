@@ -37,7 +37,7 @@ var (
 
 func init() {
 	var err error
-	nicknameRegexp, err = regexp.Compile(`^[a-zA-Z0-9_]+$`)
+	nicknameRegexp, err = regexp.Compile(`^[a-zA-Z0-9_.]+$`)
 	if err != nil {
 		log.Fatalf("nickname regexp err: %s", err.Error())
 	}
@@ -49,11 +49,20 @@ func init() {
 }
 
 // Validate проверка полей
-func (u *User) Validate() (Users, *Error) {
+func (u *User) Validate() *Error {
 	if !(nicknameRegexp.MatchString(u.Nickname) &&
 		emailRegexp.MatchString(u.Email) &&
 		u.Fullname != "") {
-		return nil, NewError(ValidationFailed, "validation failed")
+		return NewError(ValidationFailed, "validation failed")
+	}
+
+	return nil
+}
+
+// Create создание нового пользователя в базе данных
+func (u *User) Create() (Users, *Error) {
+	if validateError := u.Validate(); validateError != nil {
+		return nil, validateError
 	}
 
 	// валдация на повторы
@@ -62,21 +71,18 @@ func (u *User) Validate() (Users, *Error) {
 		return usedUsers, NewError(RowDuplication, "email or nickname are already used!")
 	}
 
-	return nil, nil
-}
-
-// Create создание нового пользователя в базе данных
-func (u *User) Create() (Users, *Error) {
-	if used, validateError := u.Validate(); validateError != nil {
-		return used, validateError
-	}
-
-	_, err := db.Exec(`INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4)`,
+	newRow, err := db.Query(`INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4) RETURNING id`,
 		u.Nickname, u.Fullname, u.About, u.Email)
-
 	if err != nil {
 		return nil, NewError(InternalDatabase, err.Error())
 	}
+	defer newRow.Close()
+	if !newRow.Next() {
+		return nil, NewError(RowNotFound, "row does not found")
+	}
+
+	// обновляем структуру так, чтобы она содержала валидный id
+	newRow.Scan(&u.ID)
 
 	return nil, nil
 }
@@ -87,7 +93,7 @@ func (u *User) Save() *Error {
 		return NewError(ValidationFailed, "ID must be setted")
 	}
 
-	if _, err := u.Validate(); err != nil {
+	if err := u.Validate(); err != nil {
 		return err
 	}
 
@@ -99,7 +105,7 @@ func (u *User) Save() *Error {
 			return NewError(RowDuplication, pgerr.Error())
 		}
 
-		return NewError(InternalDatabase, "internal")
+		return NewError(InternalDatabase, err.Error())
 	}
 
 	return nil

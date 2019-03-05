@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS users
+DROP TABLE IF EXISTS users;
 CREATE TABLE users
 (
 	id BIGSERIAL CONSTRAINT users_pk PRIMARY KEY,
 	nickname CITEXT COLLATE "en_US.utf8" NOT NULL UNIQUE
-	  CONSTRAINT users_nickname_check CHECK ( nickname ~ '^[a-zA-Z0-9_]+$' ),
+	  CONSTRAINT users_nickname_check CHECK ( nickname ~ '^[a-zA-Z0-9_.]+$' ),
 	fullname VARCHAR NOT NULL 
 		CONSTRAINT users_fullname_check CHECK ( fullname <> '' ),
 	about TEXT,

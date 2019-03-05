@@ -23,4 +23,6 @@ const (
 	ValidationFailed
 	// RowDuplication юзер с таким именем или почтой уже существует
 	RowDuplication
+	// ForeignKeyNotFound запись на которую ссылается не найдена
+	ForeignKeyNotFound
 )

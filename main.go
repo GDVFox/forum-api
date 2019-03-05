@@ -21,10 +21,13 @@ func main() {
 		log.Fatalf("cant open database connection: %s", connectError.Message)
 	}
 
-	r := mux.NewRouter()
+	r := mux.NewRouter().PathPrefix("/api/v1").Subrouter()
 	r.HandleFunc("/user/{nickname}/profile", controllers.GetUser).Methods("GET")
 	r.HandleFunc("/user/{nickname}/create", controllers.CreateUser).Methods("POST")
 	r.HandleFunc("/user/{nickname}/profile", controllers.UpdateUser).Methods("POST")
+
+	r.HandleFunc("/forum/create", controllers.CreateForum).Methods("POST")
+	r.HandleFunc("/forum/{slug}/details", controllers.GetForum).Methods("GET")
 
 	h := Handler{
 		Router: r,
