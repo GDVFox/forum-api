@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
-
 	"github.com/lib/pq"
 )
 
@@ -43,12 +41,6 @@ func (t *Thread) Validate() *Error {
 	}
 
 	return nil
-}
-
-func genSlug(title string) string {
-	newSlug, _ := uuid.NewV4()
-	return newSlug.String()
-	//return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 }
 
 func (t *Thread) Create() (*Thread, *Error) {
