@@ -10,6 +10,3 @@ CREATE TABLE forums
 	threads INTEGER NOT NULL DEFAULT 0,
 	owner CITEXT NOT NULL CONSTRAINT owner_users_fk REFERENCES users (nickname) ON DELETE CASCADE
 );
-
-CREATE unique index forums_slug_uindex
-  ON forums (slug);

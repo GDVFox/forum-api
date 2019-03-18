@@ -5,8 +5,13 @@ import (
 	"fmt"
 
 	// пустой импорт для работы с бд
+
 	_ "github.com/lib/pq"
 )
+
+type queryer interface {
+	QueryRow(string, ...interface{}) *sql.Row
+}
 
 var db *sql.DB
 

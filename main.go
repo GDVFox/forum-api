@@ -29,6 +29,8 @@ func main() {
 	r.HandleFunc("/forum/create", controllers.CreateForum).Methods("POST")
 	r.HandleFunc("/forum/{slug}/details", controllers.GetForum).Methods("GET")
 
+	r.HandleFunc("/forum/{slug}/create", controllers.CreateThread).Methods("POST")
+
 	h := Handler{
 		Router: r,
 	}

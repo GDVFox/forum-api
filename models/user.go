@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
@@ -65,24 +66,35 @@ func (u *User) Create() (Users, *Error) {
 		return nil, validateError
 	}
 
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "can not open 'user create' transaction")
+	}
+	defer tx.Rollback()
+
 	// валдация на повторы
-	usedUsers := getDuplicates(u.Nickname, u.Email)
+	usedUsers := getDuplicates(tx, u.Nickname, u.Email)
 	if usedUsers != nil {
 		return usedUsers, NewError(RowDuplication, "email or nickname are already used!")
 	}
 
-	newRow, err := db.Query(`INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4) RETURNING id`,
+	newRow, err := tx.Query(`INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4) RETURNING id`,
 		u.Nickname, u.Fullname, u.About, u.Email)
 	if err != nil {
 		return nil, NewError(InternalDatabase, err.Error())
 	}
-	defer newRow.Close()
 	if !newRow.Next() {
 		return nil, NewError(RowNotFound, "row does not found")
 	}
 
 	// обновляем структуру так, чтобы она содержала валидный id
 	newRow.Scan(&u.ID)
+	newRow.Close()
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "user create transaction commit error")
+	}
 
 	return nil, nil
 }
@@ -113,23 +125,23 @@ func (u *User) Save() *Error {
 
 // GetUserByNickname получение информации о пользователе форума по егsо имени.
 func GetUserByNickname(nickname string) (*User, *Error) {
-	return getUserBy("nickname", nickname)
+	return getUserBy(db, "nickname", nickname)
 }
 
 // GetUserByEmail получение информации о пользователе форума по егsо email.
 func GetUserByEmail(email string) (*User, *Error) {
-	return getUserBy("email", email)
+	return getUserBy(db, "email", email)
 }
 
-func getDuplicates(nickname, email string) Users {
+func getDuplicates(q queryer, nickname, email string) Users {
 	usedUsers := make([]*User, 0)
 
-	dupNickname, _ := GetUserByNickname(nickname)
+	dupNickname, _ := getUserBy(q, "nickname", nickname)
 	if dupNickname != nil {
 		usedUsers = append(usedUsers, dupNickname)
 	}
 
-	dupEmail, _ := GetUserByEmail(email)
+	dupEmail, _ := getUserBy(q, "email", email)
 	if dupEmail != nil && (dupNickname == nil || dupEmail.ID != dupNickname.ID) {
 		usedUsers = append(usedUsers, dupEmail)
 	}
@@ -141,22 +153,18 @@ func getDuplicates(nickname, email string) Users {
 	return usedUsers
 }
 
-func getUserBy(by, value string) (*User, *Error) {
+func getUserBy(q queryer, by, value string) (*User, *Error) {
+	user := &User{}
 	// спринтф затратно, потом надо это ускорить
-	rows, err := db.Query(fmt.Sprintf(`SELECT * FROM users WHERE %s = $1`, by), value)
-	if err != nil {
+	row := q.QueryRow(fmt.Sprintf(`SELECT * FROM users WHERE %s = $1`, by), value)
+	if err := row.Scan(&user.ID, &user.Nickname,
+		&user.Fullname, &user.About, &user.Email); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, NewError(RowNotFound, "row does not found")
+		}
+
 		return nil, NewError(InternalDatabase, err.Error())
 	}
-	defer rows.Close()
-	if !rows.Next() {
-		return nil, NewError(RowNotFound, "row does not found")
-	}
-
-	// пока что самый простой подход,
-	// чтобы не загружаться дополнительными уровнем рефлексии
-	user := &User{}
-	rows.Scan(&user.ID, &user.Nickname,
-		&user.Fullname, &user.About, &user.Email)
 
 	return user, nil
 }

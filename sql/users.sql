@@ -11,6 +11,3 @@ CREATE TABLE users
     CONSTRAINT users_email_check
       CHECK ( email ~ '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$' )
 );
-
-CREATE unique index users_nickname_uindex
-  ON users (nickname);
