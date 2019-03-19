@@ -9,7 +9,7 @@ CREATE TABLE threads
   message TEXT NOT NULL
     CONSTRAINT threads_message_check CHECK ( message <> '' ),
   votes INTEGER DEFAULT 0,
-  created TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
+  created TIMESTAMP WITH TIME ZONE,
   author CITEXT NOT NULL CONSTRAINT author_users_fk REFERENCES users (nickname) ON DELETE CASCADE,
   forum  CITEXT NOT NULL CONSTRAINT parent_forum_fk REFERENCES forums (slug) ON DELETE CASCADE,
 

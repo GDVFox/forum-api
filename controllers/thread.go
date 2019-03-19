@@ -4,6 +4,8 @@ import (
 	"forum-api/models"
 	"forum-api/utils"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -43,4 +45,29 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteEasyjson(w, http.StatusCreated, newThread)
+}
+
+func GetThreadsByForum(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	query := r.URL.Query()
+	limitParam, err := strconv.Atoi(query.Get("limit"))
+	if err != nil {
+		limitParam = -1
+	}
+	offsetParam, _ := time.Parse(time.RFC3339Nano, query.Get("since"))
+	desc := (query.Get("desc") == "true")
+
+	threads, threadsErr := models.GetThreadsByForum(vars["slug"], limitParam, offsetParam, desc)
+	if threadsErr != nil {
+		if threadsErr.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, threadsErr)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, threadsErr)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, threads)
 }
