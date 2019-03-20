@@ -11,6 +11,7 @@ import (
 
 type queryer interface {
 	QueryRow(string, ...interface{}) *sql.Row
+	Query(string, ...interface{}) (*sql.Rows, error)
 }
 
 var db *sql.DB

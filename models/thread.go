@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -59,15 +60,15 @@ func (t *Thread) Create() (*Thread, *Error) {
 	}
 	defer tx.Rollback()
 
-	duplicate, _ := getThreadDuplicate(tx, t.Slug, t.Author, t.Forum)
+	duplicate, _ := getThreadBy(tx, "slug", t.Slug)
 	if duplicate != nil {
 		return duplicate, nil
 	}
 
-	newRow, err := tx.Query(`INSERT INTO threads (slug, title, message, created, author, forum)  VALUES ($1, $2, $3, $4 AT TIME ZONE 'UTC', $5, $6) RETURNING id`,
+	newRow, err := tx.Query(`INSERT INTO threads (slug, title, message, created, author, forum)  VALUES ($1, $2, $3, $4 AT TIME ZONE 'UTC', $5, (SELECT slug FROM forums WHERE slug = $6)) RETURNING id, forum`,
 		t.Slug, t.Title, t.Message, t.Created, t.Author, t.Forum)
 	if err != nil {
-		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23502" {
+		if pgerr, ok := err.(*pq.Error); ok && (pgerr.Code == "23503" || pgerr.Code == "23502") {
 			return nil, NewError(ForeignKeyNotFound, pgerr.Error())
 		}
 
@@ -76,7 +77,7 @@ func (t *Thread) Create() (*Thread, *Error) {
 	if !newRow.Next() {
 		return nil, NewError(InternalDatabase, "row does not created")
 	}
-	newRow.Scan(&t.ID)
+	newRow.Scan(&t.ID, &t.Forum)
 	newRow.Close()
 
 	if err = tx.Commit(); err != nil {
@@ -162,4 +163,22 @@ func GetThreadsByForum(forumSlug string, limit int, since time.Time, desc bool) 
 	}
 
 	return threads, nil
+}
+
+func getThreadBy(q queryer, by string, value *string) (*Thread, *Error) {
+	t := &Thread{}
+	// спринтф затратно, потом надо это ускорить
+	row := q.QueryRow(fmt.Sprintf(`SELECT t.id, t.slug, t.title, t.message, t.votes, t.created,
+									t.author, t.forum FROM threads t WHERE %s = $1`, by), value)
+	if err := row.Scan(&t.ID, &t.Slug,
+		&t.Title, &t.Message, &t.Votes,
+		&t.Created, &t.Author, &t.Forum); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, NewError(RowNotFound, "row does not found")
+		}
+
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+
+	return t, nil
 }

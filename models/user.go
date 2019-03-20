@@ -156,7 +156,7 @@ func getDuplicates(q queryer, nickname, email string) Users {
 func getUserBy(q queryer, by, value string) (*User, *Error) {
 	user := &User{}
 	// спринтф затратно, потом надо это ускорить
-	row := q.QueryRow(fmt.Sprintf(`SELECT * FROM users WHERE %s = $1`, by), value)
+	row := q.QueryRow(fmt.Sprintf(`SELECT u.id, u.nickname, u.fullname, u.about, u.email FROM users u WHERE %s = $1`, by), value)
 	if err := row.Scan(&user.ID, &user.Nickname,
 		&user.Fullname, &user.About, &user.Email); err != nil {
 		if err == sql.ErrNoRows {
