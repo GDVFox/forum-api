@@ -87,23 +87,6 @@ func (t *Thread) Create() (*Thread, *Error) {
 	return nil, nil
 }
 
-func getThreadDuplicate(q queryer, slug *string, author, forum string) (*Thread, *Error) {
-	thread := &Thread{}
-	row := q.QueryRow(`SELECT t.id, t.slug, t.title, t.message, t.votes, t.created,
-						t.author, t.forum FROM threads t WHERE slug = $1 AND author = $2 AND forum = $3;`, slug, author, forum)
-	if err := row.Scan(&thread.ID, &thread.Slug,
-		&thread.Title, &thread.Message, &thread.Votes,
-		&thread.Created, &thread.Author, &thread.Forum); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, NewError(RowNotFound, "row does not found")
-		}
-
-		return nil, NewError(InternalDatabase, err.Error())
-	}
-
-	return thread, nil
-}
-
 func GetThreadsByForum(forumSlug string, limit int, since time.Time, desc bool) (Threads, *Error) {
 	query := strings.Builder{}
 	args := []interface{}{forumSlug}
