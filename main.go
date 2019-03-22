@@ -33,6 +33,9 @@ func main() {
 	r.HandleFunc("/forum/{slug}/threads", controllers.GetThreadsByForum).Methods("GET")
 
 	r.HandleFunc("/thread/{slug_or_id}/create", controllers.CreatePosts).Methods("POST")
+	r.HandleFunc("/thread/{slug_or_id}/vote", controllers.Vote).Methods("POST")
+	r.HandleFunc("/thread/{slug_or_id}/details", controllers.GetThread).Methods("GET")
+	r.HandleFunc("/thread/{slug_or_id}/posts", controllers.GetPosts).Methods("GET")
 
 	h := Handler{
 		Router: r,

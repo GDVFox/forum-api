@@ -14,6 +14,15 @@ type queryer interface {
 	Query(string, ...interface{}) (*sql.Rows, error)
 }
 
+type executer interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+}
+
+type exequeryer interface {
+	queryer
+	executer
+}
+
 var db *sql.DB
 
 //err := ConnetctDB(os.Getenv("DB_USER"), os.Getenv("DB_PASS"), os.Getenv("DB_HOST"), os.Getenv("DB_NAME"))

@@ -4,10 +4,11 @@ package models
 
 import (
 	json "encoding/json"
+	time "time"
+
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
 	jwriter "github.com/mailru/easyjson/jwriter"
-	time "time"
 )
 
 // suppress unused package warning
@@ -18,7 +19,90 @@ var (
 	_ easyjson.Marshaler
 )
 
-func easyjson2d00218DecodeForumApiModels(in *jlexer.Lexer, out *Threads) {
+func easyjson2d00218DecodeForumApiModels(in *jlexer.Lexer, out *Vote) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeString()
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "nickname":
+			out.Nickname = string(in.String())
+		case "voice":
+			out.Voice = int(in.Int())
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson2d00218EncodeForumApiModels(out *jwriter.Writer, in Vote) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"nickname\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.String(string(in.Nickname))
+	}
+	{
+		const prefix string = ",\"voice\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.Int(int(in.Voice))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v Vote) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson2d00218EncodeForumApiModels(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v Vote) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson2d00218EncodeForumApiModels(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *Vote) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson2d00218DecodeForumApiModels(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *Vote) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson2d00218DecodeForumApiModels(l, v)
+}
+func easyjson2d00218DecodeForumApiModels1(in *jlexer.Lexer, out *Threads) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		in.Skip()
@@ -54,7 +138,7 @@ func easyjson2d00218DecodeForumApiModels(in *jlexer.Lexer, out *Threads) {
 		in.Consumed()
 	}
 }
-func easyjson2d00218EncodeForumApiModels(out *jwriter.Writer, in Threads) {
+func easyjson2d00218EncodeForumApiModels1(out *jwriter.Writer, in Threads) {
 	if in == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
 		out.RawString("null")
 	} else {
@@ -76,27 +160,27 @@ func easyjson2d00218EncodeForumApiModels(out *jwriter.Writer, in Threads) {
 // MarshalJSON supports json.Marshaler interface
 func (v Threads) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson2d00218EncodeForumApiModels(&w, v)
+	easyjson2d00218EncodeForumApiModels1(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Threads) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson2d00218EncodeForumApiModels(w, v)
+	easyjson2d00218EncodeForumApiModels1(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Threads) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson2d00218DecodeForumApiModels(&r, v)
+	easyjson2d00218DecodeForumApiModels1(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Threads) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson2d00218DecodeForumApiModels(l, v)
+	easyjson2d00218DecodeForumApiModels1(l, v)
 }
-func easyjson2d00218DecodeForumApiModels1(in *jlexer.Lexer, out *Thread) {
+func easyjson2d00218DecodeForumApiModels2(in *jlexer.Lexer, out *Thread) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -159,7 +243,7 @@ func easyjson2d00218DecodeForumApiModels1(in *jlexer.Lexer, out *Thread) {
 		in.Consumed()
 	}
 }
-func easyjson2d00218EncodeForumApiModels1(out *jwriter.Writer, in Thread) {
+func easyjson2d00218EncodeForumApiModels2(out *jwriter.Writer, in Thread) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -257,23 +341,23 @@ func easyjson2d00218EncodeForumApiModels1(out *jwriter.Writer, in Thread) {
 // MarshalJSON supports json.Marshaler interface
 func (v Thread) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson2d00218EncodeForumApiModels1(&w, v)
+	easyjson2d00218EncodeForumApiModels2(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Thread) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson2d00218EncodeForumApiModels1(w, v)
+	easyjson2d00218EncodeForumApiModels2(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Thread) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson2d00218DecodeForumApiModels1(&r, v)
+	easyjson2d00218DecodeForumApiModels2(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Thread) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson2d00218DecodeForumApiModels1(l, v)
+	easyjson2d00218DecodeForumApiModels2(l, v)
 }

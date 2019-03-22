@@ -71,3 +71,66 @@ func GetThreadsByForum(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteEasyjson(w, http.StatusOK, threads)
 }
+
+func Vote(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	slug := vars["slug_or_id"]
+	threadID, err := strconv.ParseInt(slug, 10, 64)
+	isID := (err == nil)
+
+	voice := &models.Vote{}
+	err = utils.DecodeEasyjson(r.Body, voice)
+	if err != nil {
+		utils.WriteEasyjson(w, http.StatusBadRequest, &models.Error{
+			Message: "unable to decode request body;",
+		})
+		return
+	}
+
+	var thread *models.Thread
+	var threadErr *models.Error
+	if isID {
+		thread, threadErr = models.VoteByID(threadID, voice)
+	} else {
+		thread, threadErr = models.VoteBySlug(slug, voice)
+	}
+	if threadErr != nil {
+		if threadErr.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, threadErr)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, threadErr)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, thread)
+}
+
+func GetThread(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	slug := vars["slug_or_id"]
+	threadID, err := strconv.ParseInt(slug, 10, 64)
+	isID := (err == nil)
+
+	var thread *models.Thread
+	var threadErr *models.Error
+	if isID {
+		thread, threadErr = models.GetThreadByID(threadID)
+	} else {
+		thread, threadErr = models.GetThreadBySlug(slug)
+	}
+	if threadErr != nil {
+		if threadErr.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, threadErr)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, threadErr)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, thread)
+}

@@ -2,6 +2,7 @@ package models
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -87,7 +88,8 @@ func (p *Post) createImpl(q queryer) *Error {
 		p.Created = time.Now()
 	}
 
-	newRow, err := q.Query(`INSERT INTO posts (message, created, author, forum, thread, parent) VALUES ($1, $2 AT TIME ZONE 'UTC', $3, $4, $5, $6) RETURNING id`,
+	newRow, err := q.Query(`INSERT INTO posts (message, created, author, forum, thread, parent, parents)
+	VALUES ($1, $2, $3, $4, $5, $6, (SELECT parents FROM posts WHERE posts.id = $6) || (SELECT currval('posts_id_seq'))) RETURNING id`,
 		p.Message, p.Created, p.Author, p.Forum, p.Thread, p.parentImpl)
 	if err != nil {
 		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23503" {
@@ -105,4 +107,172 @@ func (p *Post) createImpl(q queryer) *Error {
 	newRow.Close()
 
 	return nil
+}
+
+type SortMode int
+
+const (
+	Flat SortMode = iota
+	Tree
+	ParentTree
+)
+
+func GetPostsByThreadID(threadID int64, limit int, since int64, mode SortMode, desc bool) (Posts, *Error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "get posts trans open error")
+	}
+	defer tx.Rollback()
+
+	res, getError := getPostsByThreadIDImpl(tx, threadID, limit, since, mode, desc)
+	if getError != nil {
+		return nil, getError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "get posts trans commit error")
+	}
+
+	return res, nil
+}
+
+func GetPostsByThreadSlug(slug string, limit int, since int64, mode SortMode, desc bool) (Posts, *Error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "get posts trans open error")
+	}
+	defer tx.Rollback()
+
+	thread, _ := getThreadBy(tx, "slug", &slug)
+	if thread == nil {
+		return nil, NewError(RowNotFound, "thread not exists")
+	}
+
+	res, getError := getPostsByThreadIDImpl(tx, thread.ID, limit, since, mode, desc)
+	if getError != nil {
+		return nil, getError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "get posts trans commit error")
+	}
+
+	return res, nil
+}
+
+func getPostsByThreadIDImpl(q queryer, threadID int64, limit int, since int64, mode SortMode, desc bool) (Posts, *Error) {
+	// АХТУНГ, страшный говнокод :(
+	query := strings.Builder{}
+	args := []interface{}{}
+	switch mode {
+	case Flat:
+		args = append(args, threadID)
+		query.WriteString(`SELECT p.id, p.message, p.is_edited, p.created, p.author,
+						 p.forum, p.thread, p.parent FROM posts p WHERE p.thread = $1`)
+		if since != 0 {
+			args = append(args, since)
+			query.WriteString(` AND (p.created, p.id) `)
+			if desc {
+				query.WriteByte('<')
+			} else {
+				query.WriteByte('>')
+			}
+			query.WriteString(` (SELECT posts.created, posts.id FROM posts WHERE posts.id=$2)`)
+		}
+		query.WriteString(` ORDER BY (p.created, p.id)`)
+		if desc {
+			query.WriteString(" DESC")
+		}
+		if limit != -1 {
+			query.WriteString(" LIMIT $")
+			query.WriteString(strconv.Itoa(len(args) + 1))
+			args = append(args, limit)
+		}
+	case Tree:
+		args = append(args, threadID)
+		query.WriteString(`SELECT p.id, p.message, p.is_edited, p.created, p.author,
+			p.forum, p.thread, p.parent FROM posts p WHERE p.thread = $1`)
+		if since != 0 {
+			args = append(args, since)
+			query.WriteString(" AND p.parents ")
+			if desc {
+				query.WriteByte('<')
+			} else {
+				query.WriteByte('>')
+			}
+			query.WriteString(` (SELECT posts.parents FROM posts WHERE posts.id = $2)`)
+		}
+		query.WriteString(" ORDER BY p.parents")
+		if desc {
+			query.WriteString(" DESC")
+		}
+		if limit != -1 {
+			query.WriteString(" LIMIT $")
+			query.WriteString(strconv.Itoa(len(args) + 1))
+			args = append(args, limit)
+		}
+	case ParentTree:
+		args = append(args, threadID)
+		query.WriteString(`SELECT p.id, p.message, p.is_edited, p.created, p.author,
+			p.forum, p.thread, p.parent FROM posts p WHERE p.parents[1] IN (
+				SELECT posts.id FROM posts WHERE posts.thread = $1 AND posts.parent IS NULL`)
+		if since != 0 {
+			args = append(args, since)
+			query.WriteString(` AND posts.id`)
+			if desc {
+				query.WriteByte('<')
+			} else {
+				query.WriteByte('>')
+			}
+			query.WriteString(` (SELECT COALESCE(posts.parent, posts.id) FROM posts WHERE posts.id = $2)`)
+		}
+		if desc {
+			query.WriteString(" ORDER BY posts.id DESC")
+		}
+		if limit != -1 {
+			query.WriteString(" LIMIT $")
+			query.WriteString(strconv.Itoa(len(args) + 1))
+			args = append(args, limit)
+		}
+		query.WriteString(`) ORDER BY`)
+		if desc {
+			query.WriteString(` p.parents[1] DESC,`)
+		}
+		query.WriteString(` p.parents`)
+	}
+	query.WriteByte(';')
+
+	formatedID := strconv.FormatInt(threadID, 10)
+	thread, _ := getThreadBy(q, "id", &formatedID)
+	if thread == nil {
+		return nil, NewError(RowNotFound, "no posts for this thread")
+	}
+
+	rows, err := q.Query(query.String(), args...)
+	if err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+
+	posts := make([]*Post, 0)
+	for rows.Next() {
+		p := &Post{}
+		err = rows.Scan(&p.ID, &p.Message,
+			&p.IsEdited, &p.Created, &p.Author,
+			&p.Forum, &p.Thread, &p.parentImpl)
+		if err != nil {
+			return nil, NewError(InternalDatabase, err.Error())
+		}
+		if p.parentImpl == nil {
+			p.Parent = 0
+		} else {
+			p.Parent = *p.parentImpl
+		}
+
+		posts = append(posts, p)
+	}
+	rows.Close()
+
+	return posts, nil
 }

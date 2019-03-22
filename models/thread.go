@@ -27,6 +27,13 @@ type Thread struct {
 //easyjson:json
 type Threads []*Thread
 
+//easyjson:json
+type Vote struct {
+	Nickname  string `json:"nickname"`
+	Voice     int    `json:"voice"`
+	voiceImpl bool
+}
+
 var (
 	threadSlugRegexp *regexp.Regexp
 )
@@ -65,7 +72,7 @@ func (t *Thread) Create() (*Thread, *Error) {
 		return duplicate, nil
 	}
 
-	newRow, err := tx.Query(`INSERT INTO threads (slug, title, message, created, author, forum)  VALUES ($1, $2, $3, $4 AT TIME ZONE 'UTC', $5, (SELECT slug FROM forums WHERE slug = $6)) RETURNING id, forum`,
+	newRow, err := tx.Query(`INSERT INTO threads (slug, title, message, created, author, forum)  VALUES ($1, $2, $3, $4, $5, (SELECT slug FROM forums WHERE slug = $6)) RETURNING id, forum`,
 		t.Slug, t.Title, t.Message, t.Created, t.Author, t.Forum)
 	if err != nil {
 		if pgerr, ok := err.(*pq.Error); ok && (pgerr.Code == "23503" || pgerr.Code == "23502") {
@@ -85,6 +92,100 @@ func (t *Thread) Create() (*Thread, *Error) {
 	}
 
 	return nil, nil
+}
+
+func VoteBySlug(slug string, voice *Vote) (*Thread, *Error) {
+	voice.voiceImpl = (voice.Voice == 1)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "can not open 'thread vode' transaction")
+	}
+	defer tx.Rollback()
+
+	thread, _ := getThreadBy(tx, "slug", &slug)
+	if thread == nil {
+		return nil, NewError(RowNotFound, "no thread with this slug")
+	}
+
+	voteError := thread.vote(tx, voice)
+	if voteError != nil {
+		return nil, voteError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "vote transaction commit error")
+	}
+
+	return thread, nil
+}
+
+// ееее копипаст
+func VoteByID(id int64, voice *Vote) (*Thread, *Error) {
+	voice.voiceImpl = (voice.Voice == 1)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "can not open 'thread vode' transaction")
+	}
+	defer tx.Rollback()
+
+	formatedID := strconv.FormatInt(id, 10)
+	thread, _ := getThreadBy(tx, "id", &formatedID)
+	if thread == nil {
+		return nil, NewError(RowNotFound, "no thread with this slug")
+	}
+
+	voteError := thread.vote(tx, voice)
+	if voteError != nil {
+		return nil, voteError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "vote transaction commit error")
+	}
+
+	return thread, nil
+}
+
+func (t *Thread) vote(q exequeryer, voice *Vote) *Error {
+	// чтобы далее понять, обновилось ли что-то
+	oldVotes := t.Votes
+
+	var isUp bool
+	row := q.QueryRow(`SELECT v.is_up FROM votes v WHERE author = $1 AND thread = $2`, voice.Nickname, t.ID)
+	if err := row.Scan(&isUp); err == nil {
+		// нужно обновить
+		if isUp != voice.voiceImpl {
+			_, err = q.Exec(`UPDATE votes SET is_up = $1 WHERE author = $2 AND thread = $3`, voice.voiceImpl, voice.Nickname, t.ID)
+			if err != nil {
+				return NewError(InternalDatabase, err.Error())
+			}
+
+			// затираем старый + добавили новый
+			t.Votes += 2 * int32(voice.Voice)
+		}
+	} else if err == sql.ErrNoRows {
+		_, err = q.Exec(`INSERT INTO votes (author, thread, is_up) VALUES ($1, $2, $3)`, voice.Nickname, t.ID, voice.voiceImpl)
+		if err != nil {
+			return NewError(InternalDatabase, err.Error())
+		}
+
+		t.Votes += int32(voice.Voice)
+	} else {
+		return NewError(InternalDatabase, err.Error())
+	}
+
+	if oldVotes != t.Votes {
+		_, err := q.Exec(`UPDATE threads SET votes = $1 WHERE id = $2`, t.Votes, t.ID)
+		if err != nil {
+			return NewError(InternalDatabase, err.Error())
+		}
+	}
+
+	return nil
 }
 
 func GetThreadsByForum(forumSlug string, limit int, since time.Time, desc bool) (Threads, *Error) {
@@ -146,6 +247,15 @@ func GetThreadsByForum(forumSlug string, limit int, since time.Time, desc bool) 
 	}
 
 	return threads, nil
+}
+
+func GetThreadBySlug(slug string) (*Thread, *Error) {
+	return getThreadBy(db, "slug", &slug)
+}
+
+func GetThreadByID(id int64) (*Thread, *Error) {
+	formatedID := strconv.FormatInt(id, 10)
+	return getThreadBy(db, "id", &formatedID)
 }
 
 func getThreadBy(q queryer, by string, value *string) (*Thread, *Error) {
