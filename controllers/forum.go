@@ -4,6 +4,7 @@ import (
 	"forum-api/models"
 	"forum-api/utils"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -59,4 +60,29 @@ func CreateForum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteEasyjson(w, http.StatusCreated, newForum)
+}
+
+func GetForumUsers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	query := r.URL.Query()
+	limitParam, err := strconv.Atoi(query.Get("limit"))
+	if err != nil {
+		limitParam = -1
+	}
+	offsetParam := query.Get("since")
+	desc := (query.Get("desc") == "true")
+
+	users, errs := models.GetUsersByForumSlug(vars["slug"], limitParam, offsetParam, desc)
+	if errs != nil {
+		if errs.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, errs)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, errs)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, users)
 }

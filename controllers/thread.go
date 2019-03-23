@@ -47,6 +47,41 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 	utils.WriteEasyjson(w, http.StatusCreated, newThread)
 }
 
+func UpdateThread(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	slug := vars["slug_or_id"]
+	threadID, err := strconv.ParseInt(slug, 10, 64)
+	isID := (err == nil)
+
+	thread := &models.Thread{}
+	err = utils.DecodeEasyjson(r.Body, thread)
+	if err != nil {
+		utils.WriteEasyjson(w, http.StatusBadRequest, &models.Error{
+			Message: "unable to decode request body;",
+		})
+		return
+	}
+
+	if isID {
+		thread.ID = threadID
+	} else {
+		thread.Slug = &slug
+	}
+
+	if updErr := thread.Update(); updErr != nil {
+		if updErr.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, updErr)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, updErr)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, thread)
+}
+
 func GetThreadsByForum(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
@@ -96,7 +131,7 @@ func Vote(w http.ResponseWriter, r *http.Request) {
 		thread, threadErr = models.VoteBySlug(slug, voice)
 	}
 	if threadErr != nil {
-		if threadErr.Code == models.RowNotFound {
+		if threadErr.Code == models.RowNotFound || threadErr.Code == models.ForeignKeyNotFound {
 			utils.WriteEasyjson(w, http.StatusNotFound, threadErr)
 			return
 		}

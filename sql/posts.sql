@@ -12,3 +12,13 @@ CREATE TABLE posts
 	parent BIGINT CONSTRAINT parent_post_fk REFERENCES posts(id) ON DELETE CASCADE,
 	parents BIGINT[] NOT NULL
 );
+
+DROP FUNCTION IF EXISTS post_count_increment CASCADE;
+CREATE FUNCTION post_count_increment() RETURNS TRIGGER AS $_$
+BEGIN
+UPDATE forums SET posts = posts + 1 WHERE slug = new.forum;
+RETURN NEW;
+END $_$ LANGUAGE 'plpgsql';
+
+CREATE TRIGGER post_insert_trigger AFTER INSERT ON posts
+  FOR EACH ROW EXECUTE PROCEDURE post_count_increment();

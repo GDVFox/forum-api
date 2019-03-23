@@ -94,6 +94,52 @@ func (t *Thread) Create() (*Thread, *Error) {
 	return nil, nil
 }
 
+func (t *Thread) Update() *Error {
+	tx, err := db.Begin()
+	if err != nil {
+		return NewError(InternalDatabase, "can not open 'thread update' transaction")
+	}
+	defer tx.Rollback()
+
+	var thread *Thread
+	if t.Slug == nil {
+		id := strconv.FormatInt(t.ID, 10)
+		thread, _ = getThreadBy(tx, "id", &id)
+	} else {
+		thread, _ = getThreadBy(tx, "slug", t.Slug)
+	}
+	if thread == nil {
+		return NewError(RowNotFound, "can not find thread with this fields")
+	}
+
+	needsUpdate := false
+	if t.Message != "" && t.Message != thread.Message {
+		needsUpdate = true
+		thread.Message = t.Message
+	}
+	if t.Title != "" && t.Title != thread.Title {
+		needsUpdate = true
+		thread.Title = t.Title
+	}
+	*t = *thread
+
+	// нечего обновлять
+	if !needsUpdate {
+		return nil
+	}
+
+	_, err = tx.Exec(`UPDATE threads SET (message, title) = ($1, $2) WHERE id = $3`, t.Message, t.Title, t.ID)
+	if err != nil {
+		return NewError(InternalDatabase, err.Error())
+	}
+
+	if err = tx.Commit(); err != nil {
+		return NewError(InternalDatabase, "thread update transaction commit error")
+	}
+
+	return nil
+}
+
 func VoteBySlug(slug string, voice *Vote) (*Thread, *Error) {
 	voice.voiceImpl = (voice.Voice == 1)
 
@@ -170,6 +216,10 @@ func (t *Thread) vote(q exequeryer, voice *Vote) *Error {
 	} else if err == sql.ErrNoRows {
 		_, err = q.Exec(`INSERT INTO votes (author, thread, is_up) VALUES ($1, $2, $3)`, voice.Nickname, t.ID, voice.voiceImpl)
 		if err != nil {
+			if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23503" {
+				return NewError(ForeignKeyNotFound, pgerr.Error())
+			}
+
 			return NewError(InternalDatabase, err.Error())
 		}
 

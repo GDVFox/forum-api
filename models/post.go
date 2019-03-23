@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"strconv"
 	"strings"
 	"time"
@@ -10,21 +11,28 @@ import (
 
 //easyjson:json
 type Post struct {
-	ID         int64     `json:"id"`
-	Message    string    `json:"message"`
-	IsEdited   bool      `json:"is_edited"`
-	Author     string    `json:"author"`
-	Forum      string    `json:"forum"`
-	Thread     int64     `json:"thread"`
-	ThreadSlug *string   `json:"-"`
-	Parent     int64     `json:"parent"`
-	Created    time.Time `json:"created"`
+	ID       int64     `json:"id"`
+	Message  string    `json:"message"`
+	IsEdited bool      `json:"isEdited"`
+	Author   string    `json:"author"`
+	Forum    string    `json:"forum"`
+	Thread   int64     `json:"thread"`
+	Parent   int64     `json:"parent"`
+	Created  time.Time `json:"created"`
 
 	parentImpl *int64
 }
 
 //easyjson:json
 type Posts []*Post
+
+//easyjson:json
+type PostFull struct {
+	Post   *Post   `json:"post"`
+	Author *User   `json:"author"`
+	Forum  *Forum  `json:"forum"`
+	Thread *Thread `json:"thread"`
+}
 
 func (p *Post) Validate() *Error {
 	if p.Message == "" {
@@ -34,20 +42,28 @@ func (p *Post) Validate() *Error {
 	return nil
 }
 
-func (p *Post) Create() *Error {
-	return p.createImpl(db)
-}
-
-func (ps Posts) Create() *Error {
+func (ps Posts) Create(slugOrID interface{}) *Error {
 	tx, err := db.Begin()
 	if err != nil {
 		return NewError(InternalDatabase, "can not open posts create tx")
 	}
 	defer tx.Rollback()
 
+	var thread *Thread
+	switch v := slugOrID.(type) {
+	case int64:
+		id := strconv.FormatInt(v, 10)
+		thread, _ = getThreadBy(tx, "id", &id)
+	case string:
+		thread, _ = getThreadBy(tx, "slug", &v)
+	}
+	if thread == nil {
+		return NewError(ForeignKeyNotFound, "thread not found")
+	}
+
 	var createError *Error
 	for _, p := range ps {
-		createError = p.createImpl(tx)
+		createError = p.createImpl(tx, thread)
 		if createError != nil {
 			return createError
 		}
@@ -61,20 +77,9 @@ func (ps Posts) Create() *Error {
 	return nil
 }
 
-func (p *Post) createImpl(q queryer) *Error {
+func (p *Post) createImpl(q queryer, thread *Thread) *Error {
 	if validateError := p.Validate(); validateError != nil {
 		return validateError
-	}
-
-	var thread *Thread
-	if p.ThreadSlug != nil {
-		thread, _ = getThreadBy(q, "slug", p.ThreadSlug)
-	} else {
-		id := strconv.FormatInt(p.Thread, 10)
-		thread, _ = getThreadBy(q, "id", &id)
-	}
-	if thread == nil {
-		return NewError(RowNotFound, "thread not found")
 	}
 
 	p.Forum = thread.Forum // можно убрать поле форум в табоице posts
@@ -82,6 +87,12 @@ func (p *Post) createImpl(q queryer) *Error {
 
 	if p.Parent != 0 {
 		p.parentImpl = &p.Parent
+		row := q.QueryRow(`SELECT p.thread FROM posts p WHERE p.id = $1;`, p.parentImpl)
+
+		var parentThread int64
+		if err := row.Scan(&parentThread); err != nil || parentThread != p.Thread {
+			return NewError(ForeignKeyConflict, "Parent post was created in another thread")
+		}
 	}
 
 	if p.Created.IsZero() {
@@ -107,6 +118,113 @@ func (p *Post) createImpl(q queryer) *Error {
 	newRow.Close()
 
 	return nil
+}
+
+func (p *Post) Update() *Error {
+	tx, err := db.Begin()
+	if err != nil {
+		return NewError(InternalDatabase, "can not open 'thread update' transaction")
+	}
+	defer tx.Rollback()
+
+	storedPost := &Post{}
+	row := tx.QueryRow(`SELECT p.id, p.message, p.is_edited, p.created, p.author, p.forum, p.thread, p.parent FROM posts p WHERE p.id = $1;`, p.ID)
+	if err := row.Scan(&storedPost.ID, &storedPost.Message,
+		&storedPost.IsEdited, &storedPost.Created, &storedPost.Author,
+		&storedPost.Forum, &storedPost.Thread, &storedPost.parentImpl); err != nil {
+		if err == sql.ErrNoRows {
+			return NewError(RowNotFound, err.Error())
+		}
+
+		return NewError(InternalDatabase, err.Error())
+	}
+	if storedPost.parentImpl == nil {
+		storedPost.Parent = 0
+	} else {
+		storedPost.Parent = *storedPost.parentImpl
+	}
+
+	needsUpdate := false
+	if p.Message != "" && storedPost.Message != p.Message {
+		needsUpdate = true
+		storedPost.Message = p.Message
+		storedPost.IsEdited = true
+	}
+	*p = *storedPost
+
+	if !needsUpdate {
+		return nil
+	}
+
+	_, err = tx.Exec(`UPDATE posts SET (message, is_edited) = ($1, $2) WHERE id = $3`, p.Message, p.IsEdited, p.ID)
+	if err != nil {
+		return NewError(InternalDatabase, err.Error())
+	}
+
+	if err = tx.Commit(); err != nil {
+		return NewError(InternalDatabase, "thread update transaction commit error")
+	}
+
+	return nil
+}
+
+func GetPostByID(id int64, scope []string) (*PostFull, *Error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+	defer tx.Rollback()
+
+	pf := &PostFull{}
+	var getErr *Error
+
+	pf.Post, getErr = getPostByIDImpl(tx, id)
+	if getErr != nil {
+		return nil, getErr
+	}
+
+	for _, sc := range scope {
+		switch sc {
+		case "user":
+			pf.Author, getErr = getUserBy(tx, "nickname", pf.Post.Author)
+		case "forum":
+			pf.Forum, getErr = getForumBySlugImpl(tx, pf.Post.Forum)
+		case "thread":
+			id := strconv.FormatInt(pf.Post.Thread, 10)
+			pf.Thread, getErr = getThreadBy(tx, "id", &id)
+		}
+		if getErr != nil {
+			return nil, getErr
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+	return pf, nil
+}
+
+func getPostByIDImpl(q queryer, id int64) (*Post, *Error) {
+	p := &Post{}
+
+	row := q.QueryRow(`SELECT p.id, p.message, p.is_edited, p.created, p.author, p.forum, p.thread, p.parent FROM posts p WHERE p.id = $1;`, id)
+	if err := row.Scan(&p.ID, &p.Message,
+		&p.IsEdited, &p.Created, &p.Author,
+		&p.Forum, &p.Thread, &p.parentImpl); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, NewError(RowNotFound, err.Error())
+		}
+
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+	if p.parentImpl == nil {
+		p.Parent = 0
+	} else {
+		p.Parent = *p.parentImpl
+	}
+
+	return p, nil
 }
 
 type SortMode int

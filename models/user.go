@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/lib/pq"
 )
@@ -131,6 +133,72 @@ func GetUserByNickname(nickname string) (*User, *Error) {
 // GetUserByEmail получение информации о пользователе форума по егsо email.
 func GetUserByEmail(email string) (*User, *Error) {
 	return getUserBy(db, "email", email)
+}
+
+func GetUsersByForumSlug(slug string, limit int, since string, desc bool) (Users, *Error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, NewError(InternalDatabase, "can not open 'thread update' transaction")
+	}
+	defer tx.Rollback()
+
+	forum, _ := GetForumBySlug(slug)
+	if forum == nil {
+		return nil, NewError(RowNotFound, "forum not found")
+	}
+
+	query := strings.Builder{}
+	args := []interface{}{slug}
+	query.WriteString(`SELECT DISTINCT ON (u.nickname COLLATE "C") u.id, u.nickname, u.fullname, u.about, u.email FROM users u WHERE nickname IN (
+		SELECT author FROM threads WHERE forum = $1
+	  UNION ALL
+	  SELECT author FROM posts WHERE forum = $1
+	)`)
+	if since != "" {
+		args = append(args, since)
+		query.WriteString(` AND nickname COLLATE "C" `)
+		if desc {
+			query.WriteByte('<')
+		} else {
+			query.WriteByte('>')
+		}
+		query.WriteString(` $2`)
+	}
+
+	query.WriteString(` ORDER BY (u.nickname COLLATE "C")`)
+	if desc {
+		query.WriteString(" DESC")
+	}
+	if limit != -1 {
+		query.WriteString(" LIMIT $")
+		query.WriteString(strconv.Itoa(len(args) + 1))
+		args = append(args, limit)
+	}
+	query.WriteByte(';')
+
+	rows, err := tx.Query(query.String(), args...)
+	if err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+
+	users := make([]*User, 0)
+	for rows.Next() {
+		u := &User{}
+		err = rows.Scan(&u.ID, &u.Nickname,
+			&u.Fullname, &u.About, &u.Email)
+		if err != nil {
+			return nil, NewError(InternalDatabase, err.Error())
+		}
+		users = append(users, u)
+	}
+	rows.Close()
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+
+	return users, nil
 }
 
 func getDuplicates(q queryer, nickname, email string) Users {

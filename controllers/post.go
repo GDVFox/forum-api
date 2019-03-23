@@ -5,6 +5,7 @@ import (
 	"forum-api/utils"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -13,9 +14,14 @@ import (
 func CreatePosts(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
+	var slugOrID interface{}
 	slug := vars["slug_or_id"]
+	slugOrID = slug
+
 	threadID, err := strconv.ParseInt(slug, 10, 64)
-	isID := (err == nil)
+	if err == nil {
+		slugOrID = threadID
+	}
 
 	newPosts := make(models.Posts, 0)
 	err = utils.DecodeEasyjson(r.Body, &newPosts)
@@ -29,19 +35,16 @@ func CreatePosts(w http.ResponseWriter, r *http.Request) {
 	creationTime := time.Now()
 	for _, p := range newPosts {
 		p.Created = creationTime
-		if isID {
-			p.Thread = threadID
-		} else {
-			p.ThreadSlug = &slug
-		}
 	}
 
-	if createError := newPosts.Create(); createError != nil {
+	if createError := newPosts.Create(slugOrID); createError != nil {
 		var code int
 		if createError.Code == models.ValidationFailed {
 			code = http.StatusBadRequest
 		} else if createError.Code == models.ForeignKeyNotFound {
 			code = http.StatusNotFound
+		} else if createError.Code == models.ForeignKeyConflict {
+			code = http.StatusConflict
 		} else {
 			code = http.StatusInternalServerError
 		}
@@ -96,4 +99,52 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteEasyjson(w, http.StatusOK, posts)
+}
+
+func GetPost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	id := vars["id"]
+	postID, _ := strconv.ParseInt(id, 10, 64)
+
+	info, err := models.GetPostByID(postID, strings.Split(r.URL.Query().Get("related"), ","))
+	if err != nil {
+		if err.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, err)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, info)
+}
+
+func UpdatePost(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	id := vars["id"]
+	postID, _ := strconv.ParseInt(id, 10, 64)
+	post := &models.Post{}
+	err := utils.DecodeEasyjson(r.Body, post)
+	if err != nil {
+		utils.WriteEasyjson(w, http.StatusBadRequest, &models.Error{
+			Message: "unable to decode request body;",
+		})
+		return
+	}
+	post.ID = postID
+
+	if updErr := post.Update(); updErr != nil {
+		if updErr.Code == models.RowNotFound {
+			utils.WriteEasyjson(w, http.StatusNotFound, updErr)
+			return
+		}
+
+		utils.WriteEasyjson(w, http.StatusInternalServerError, updErr)
+		return
+	}
+
+	utils.WriteEasyjson(w, http.StatusOK, post)
 }

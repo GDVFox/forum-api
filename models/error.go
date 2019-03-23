@@ -25,4 +25,6 @@ const (
 	RowDuplication
 	// ForeignKeyNotFound запись на которую ссылается не найдена
 	ForeignKeyNotFound
+	// ForeignKeyConflict запись на которую ссылаемся некорректна(например родитель в другом треде)
+	ForeignKeyConflict
 )
