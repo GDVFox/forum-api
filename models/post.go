@@ -99,6 +99,8 @@ func (p *Post) createImpl(q queryer, thread *Thread) *Error {
 		p.Created = time.Now()
 	}
 
+	// PostgreSQL считает с точностью до MS
+	p.Created = p.Created.Round(time.Millisecond)
 	newRow, err := q.Query(`INSERT INTO posts (message, created, author, forum, thread, parent, parents)
 	VALUES ($1, $2, $3, $4, $5, $6, (SELECT parents FROM posts WHERE posts.id = $6) || (SELECT currval('posts_id_seq'))) RETURNING id`,
 		p.Message, p.Created, p.Author, p.Forum, p.Thread, p.parentImpl)
@@ -346,8 +348,9 @@ func getPostsByThreadIDImpl(q queryer, threadID int64, limit int, since int64, m
 			}
 			query.WriteString(` (SELECT COALESCE(posts.parent, posts.id) FROM posts WHERE posts.id = $2)`)
 		}
+		query.WriteString(" ORDER BY posts.id")
 		if desc {
-			query.WriteString(" ORDER BY posts.id DESC")
+			query.WriteString(" DESC")
 		}
 		if limit != -1 {
 			query.WriteString(" LIMIT $")
