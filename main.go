@@ -1,11 +1,11 @@
 package main
 
 import (
-	"forum-api/controllers"
-	"forum-api/models"
 	"log"
 	"net/http"
-	"os"
+
+	"github.com/GDVFox/forum-api/controllers"
+	"github.com/GDVFox/forum-api/models"
 
 	"github.com/gorilla/mux"
 )
@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 func main() {
-	connectError := models.ConnetctDB("forum_db_user", "qwerty", "localhost", "forum_db")
+	connectError := models.ConnetctDB("docker", "docker", "localhost", "docker")
 	if connectError != nil {
 		log.Fatalf("cant open database connection: %s", connectError.Message)
 	}
@@ -48,7 +48,7 @@ func main() {
 		Router: r,
 	}
 
-	port := os.Getenv("PORT")
+	port := "5000"
 	log.Printf("MainService successfully started at port %s", port)
 	err := http.ListenAndServe(":"+port, h.Router)
 	if err != nil {

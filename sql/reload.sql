@@ -1,13 +1,15 @@
+CREATE EXTENSION IF NOT EXISTS CITEXT;
+
 DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users
 (
 	id BIGSERIAL CONSTRAINT users_pk PRIMARY KEY,
-	nickname CITEXT COLLATE "en_US.utf8" NOT NULL UNIQUE
+	nickname CITEXT NOT NULL UNIQUE
 	  CONSTRAINT users_nickname_check CHECK ( nickname ~ '^[a-zA-Z0-9_.]+$' ),
 	fullname VARCHAR NOT NULL
 		CONSTRAINT users_fullname_check CHECK ( fullname <> '' ),
 	about TEXT,
-	email CITEXT COLLATE "en_US.utf8" NOT NULL UNIQUE
+	email CITEXT NOT NULL UNIQUE
     CONSTRAINT users_email_check
       CHECK ( email ~ '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$' )
 );
@@ -16,7 +18,7 @@ DROP TABLE IF EXISTS forums CASCADE;
 CREATE TABLE forums
 (
 	id BIGSERIAL CONSTRAINT forums_pk PRIMARY KEY,
-	slug CITEXT COLLATE "en_US.utf8" NOT NULL UNIQUE
+	slug CITEXT NOT NULL UNIQUE
 	  CONSTRAINT forums_slug_check CHECK ( slug ~ '^(\d|\w|-|_)*(\w|-|_)(\d|\w|-|_)*$' ),
 	title TEXT NOT NULL
 		CONSTRAINT forums_title_check CHECK ( title <> '' ),
@@ -29,7 +31,7 @@ DROP TABLE IF EXISTS threads CASCADE;
 CREATE TABLE threads
 (
   id BIGSERIAL CONSTRAINT threads_pk PRIMARY KEY,
-  slug CITEXT COLLATE "en_US.utf8" UNIQUE
+  slug CITEXT UNIQUE
 	  CONSTRAINT threads_slug_check CHECK ( slug ~ '^(\d|\w|-|_)*(\w|-|_)(\d|\w|-|_)*$' ),
 	title TEXT NOT NULL
     CONSTRAINT threads_title_check CHECK ( title <> '' ),

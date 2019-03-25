@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"forum-api/models"
-	"forum-api/utils"
 	"net/http"
+
+	"github.com/GDVFox/forum-api/models"
+	"github.com/GDVFox/forum-api/utils"
 
 	"github.com/gorilla/mux"
 )

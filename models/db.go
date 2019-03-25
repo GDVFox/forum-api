@@ -40,6 +40,10 @@ func ConnetctDB(dbUser, dbPass, dbHost, dbName string) *Error {
 	}
 
 	db = newDB
+	if err := Load(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

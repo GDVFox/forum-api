@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"forum-api/models"
-	"forum-api/utils"
 	"net/http"
+
+	"github.com/GDVFox/forum-api/models"
+	"github.com/GDVFox/forum-api/utils"
 )
 
 func GetStatus(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +18,7 @@ func GetStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func Clear(w http.ResponseWriter, r *http.Request) {
-	err := models.Clear()
+	err := models.Load()
 	if err != nil {
 		utils.WriteEasyjson(w, http.StatusInternalServerError, err)
 		return
