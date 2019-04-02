@@ -346,7 +346,7 @@ func getPostsByThreadIDImpl(q queryer, threadID int64, limit int, since int64, m
 			} else {
 				query.WriteByte('>')
 			}
-			query.WriteString(` (SELECT COALESCE(posts.parent, posts.id) FROM posts WHERE posts.id = $2)`)
+			query.WriteString(` (SELECT COALESCE(posts.parents[1], posts.id) FROM posts WHERE posts.id = $2)`)
 		}
 		query.WriteString(" ORDER BY posts.id")
 		if desc {
