@@ -1,11 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"log"
 	"regexp"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 // Forum информация о форуме.
@@ -63,18 +62,20 @@ func (f *Forum) Create() (*Forum, *Error) {
 	newRow, err := tx.Query(`INSERT INTO forums (slug, title, owner) VALUES ($1, $2, (SELECT nickname FROM users WHERE nickname = $3)) RETURNING id, owner`,
 		f.Slug, f.Title, f.Owner)
 	if err != nil {
-		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23502" {
-			return nil, NewError(ForeignKeyNotFound, pgerr.Error())
-		}
-
 		return nil, NewError(InternalDatabase, err.Error())
 	}
 	if !newRow.Next() {
-		return nil, NewError(InternalDatabase, "row does not created")
+		if pgerr, ok := newRow.Err().(pgx.PgError); ok && pgerr.Code == "23502" {
+			return nil, NewError(ForeignKeyNotFound, pgerr.Error())
+		}
+
+		return nil, NewError(InternalDatabase, newRow.Err().Error())
 	}
 	// обновляем структуру, чтобы она содержала валидное имя создателя(учитывая регистр)
 	// и валидный ID
-	newRow.Scan(&f.ID, &f.Owner)
+	if err = newRow.Scan(&f.ID, &f.Owner); err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
 	newRow.Close()
 
 	if err = tx.Commit(); err != nil {
@@ -94,7 +95,7 @@ func getForumBySlugImpl(q queryer, slug string) (*Forum, *Error) {
 	row := q.QueryRow(`SELECT f.id, f.slug, f.title, f.posts, f.threads, f.owner FROM forums f WHERE slug = $1`, slug)
 	if err := row.Scan(&forum.ID, &forum.Slug, &forum.Title,
 		&forum.Posts, &forum.Threads, &forum.Owner); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, NewError(RowNotFound, "row does not found")
 		}
 

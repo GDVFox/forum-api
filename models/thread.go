@@ -1,7 +1,6 @@
 package models
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
@@ -9,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 //easyjson:json
@@ -75,16 +74,19 @@ func (t *Thread) Create() (*Thread, *Error) {
 	newRow, err := tx.Query(`INSERT INTO threads (slug, title, message, created, author, forum)  VALUES ($1, $2, $3, $4, $5, (SELECT slug FROM forums WHERE slug = $6)) RETURNING id, forum`,
 		t.Slug, t.Title, t.Message, t.Created, t.Author, t.Forum)
 	if err != nil {
-		if pgerr, ok := err.(*pq.Error); ok && (pgerr.Code == "23503" || pgerr.Code == "23502") {
-			return nil, NewError(ForeignKeyNotFound, pgerr.Error())
-		}
-
 		return nil, NewError(InternalDatabase, err.Error())
 	}
 	if !newRow.Next() {
-		return nil, NewError(InternalDatabase, "row does not created")
+		if pgerr, ok := newRow.Err().(pgx.PgError); ok && (pgerr.Code == "23502" || pgerr.Code == "23503") {
+			return nil, NewError(ForeignKeyNotFound, pgerr.Error())
+		}
+
+		return nil, NewError(InternalDatabase, newRow.Err().Error())
 	}
-	newRow.Scan(&t.ID, &t.Forum)
+	if err = newRow.Scan(&t.ID, &t.Forum); err != nil {
+		return nil, NewError(InternalDatabase, err.Error())
+	}
+
 	newRow.Close()
 
 	if err = tx.Commit(); err != nil {
@@ -213,10 +215,10 @@ func (t *Thread) vote(q exequeryer, voice *Vote) *Error {
 			// затираем старый + добавили новый
 			t.Votes += 2 * int32(voice.Voice)
 		}
-	} else if err == sql.ErrNoRows {
+	} else if err == pgx.ErrNoRows {
 		_, err = q.Exec(`INSERT INTO votes (author, thread, is_up) VALUES ($1, $2, $3)`, voice.Nickname, t.ID, voice.voiceImpl)
 		if err != nil {
-			if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23503" {
+			if pgerr, ok := err.(pgx.PgError); ok && pgerr.Code == "23503" {
 				return NewError(ForeignKeyNotFound, pgerr.Error())
 			}
 
@@ -316,7 +318,7 @@ func getThreadBy(q queryer, by string, value *string) (*Thread, *Error) {
 	if err := row.Scan(&t.ID, &t.Slug,
 		&t.Title, &t.Message, &t.Votes,
 		&t.Created, &t.Author, &t.Forum); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, NewError(RowNotFound, "row does not found")
 		}
 

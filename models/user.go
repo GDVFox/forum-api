@@ -1,14 +1,13 @@
 package models
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 // User информация о пользователе
@@ -90,7 +89,9 @@ func (u *User) Create() (Users, *Error) {
 	}
 
 	// обновляем структуру так, чтобы она содержала валидный id
-	newRow.Scan(&u.ID)
+	if err = newRow.Scan(&u.ID); err != nil {
+		return nil, NewError(RowNotFound, "row does not found")
+	}
 	newRow.Close()
 
 	err = tx.Commit()
@@ -115,7 +116,7 @@ func (u *User) Save() *Error {
 	_, err := db.Exec(`UPDATE users SET (nickname, fullname, about, email) = ($1, $2, $3, $4) WHERE id = $5`,
 		u.Nickname, u.Fullname, u.About, u.Email, u.ID)
 	if err != nil {
-		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23505" {
+		if pgerr, ok := err.(pgx.PgError); ok && pgerr.Code == "23505" {
 			return NewError(RowDuplication, pgerr.Error())
 		}
 
@@ -227,7 +228,7 @@ func getUserBy(q queryer, by, value string) (*User, *Error) {
 	row := q.QueryRow(fmt.Sprintf(`SELECT u.id, u.nickname, u.fullname, u.about, u.email FROM users u WHERE %s = $1`, by), value)
 	if err := row.Scan(&user.ID, &user.Nickname,
 		&user.Fullname, &user.About, &user.Email); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, NewError(RowNotFound, "row does not found")
 		}
 

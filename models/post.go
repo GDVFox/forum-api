@@ -1,12 +1,11 @@
 package models
 
 import (
-	"database/sql"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 //easyjson:json
@@ -105,18 +104,20 @@ func (p *Post) createImpl(q queryer, thread *Thread) *Error {
 	VALUES ($1, $2, $3, $4, $5, $6, (SELECT parents FROM posts WHERE posts.id = $6) || (SELECT currval('posts_id_seq'))) RETURNING id`,
 		p.Message, p.Created, p.Author, p.Forum, p.Thread, p.parentImpl)
 	if err != nil {
-		if pgerr, ok := err.(*pq.Error); ok && pgerr.Code == "23503" {
-			return NewError(ForeignKeyNotFound, pgerr.Error())
-		}
-
 		return NewError(InternalDatabase, err.Error())
 	}
 	if !newRow.Next() {
-		return NewError(InternalDatabase, "row does not created")
+		if pgerr, ok := newRow.Err().(pgx.PgError); ok && pgerr.Code == "23503" {
+			return NewError(ForeignKeyNotFound, pgerr.Error())
+		}
+
+		return NewError(InternalDatabase, newRow.Err().Error())
 	}
 	// обновляем структуру, чтобы она содержала валидное имя создателя(учитывая регистр)
 	// и валидный ID
-	newRow.Scan(&p.ID)
+	if err = newRow.Scan(&p.ID); err != nil {
+		return NewError(InternalDatabase, err.Error())
+	}
 	newRow.Close()
 
 	return nil
@@ -134,7 +135,7 @@ func (p *Post) Update() *Error {
 	if err := row.Scan(&storedPost.ID, &storedPost.Message,
 		&storedPost.IsEdited, &storedPost.Created, &storedPost.Author,
 		&storedPost.Forum, &storedPost.Thread, &storedPost.parentImpl); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return NewError(RowNotFound, err.Error())
 		}
 
@@ -214,7 +215,7 @@ func getPostByIDImpl(q queryer, id int64) (*Post, *Error) {
 	if err := row.Scan(&p.ID, &p.Message,
 		&p.IsEdited, &p.Created, &p.Author,
 		&p.Forum, &p.Thread, &p.parentImpl); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, NewError(RowNotFound, err.Error())
 		}
 

@@ -1,21 +1,16 @@
 package models
 
 import (
-	"database/sql"
-	"fmt"
-
-	// пустой импорт для работы с бд
-
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 type queryer interface {
-	QueryRow(string, ...interface{}) *sql.Row
-	Query(string, ...interface{}) (*sql.Rows, error)
+	QueryRow(string, ...interface{}) *pgx.Row
+	Query(string, ...interface{}) (*pgx.Rows, error)
 }
 
 type executer interface {
-	Exec(string, ...interface{}) (sql.Result, error)
+	Exec(string, ...interface{}) (pgx.CommandTag, error)
 }
 
 type exequeryer interface {
@@ -23,19 +18,23 @@ type exequeryer interface {
 	executer
 }
 
-var db *sql.DB
+var db *pgx.ConnPool
 
 //err := ConnetctDB(os.Getenv("DB_USER"), os.Getenv("DB_PASS"), os.Getenv("DB_HOST"), os.Getenv("DB_NAME"))
 
 // ConnetctDB создаёт новый коннект к базе и заворачивает в контроллер
 func ConnetctDB(dbUser, dbPass, dbHost, dbName string) *Error {
-	newDB, err := sql.Open("postgres",
-		fmt.Sprintf("postgres://%s:%s@%s/%s", dbUser, dbPass, dbHost, dbName))
+	newDB, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     dbHost,
+			User:     dbUser,
+			Password: dbPass,
+			Port:     5432,
+			Database: dbName,
+		},
+		MaxConnections: 50,
+	})
 	if err != nil {
-		return NewError(InternalDatabase, err.Error())
-	}
-
-	if err := newDB.Ping(); err != nil {
 		return NewError(InternalDatabase, err.Error())
 	}
 
@@ -49,6 +48,6 @@ func ConnetctDB(dbUser, dbPass, dbHost, dbName string) *Error {
 
 // GetDB возвращает указатель на контроллер,
 // для дополнительных запросов, не включенных в модели;
-func GetDB() *sql.DB {
+func GetDB() *pgx.ConnPool {
 	return db
 }

@@ -16,7 +16,8 @@ type Handler struct {
 }
 
 func main() {
-	connectError := models.ConnetctDB("docker", "docker", "localhost", "docker")
+	//connectError := models.ConnetctDB("docker", "docker", "localhost", "docker")
+	connectError := models.ConnetctDB("forum_db_user", "qwerty", "localhost", "forum_db")
 	if connectError != nil {
 		log.Fatalf("cant open database connection: %s", connectError.Message)
 	}
