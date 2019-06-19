@@ -135,7 +135,7 @@ END $_$ LANGUAGE 'plpgsql';
 
 CREATE TRIGGER post_insert_trigger AFTER INSERT ON posts
   FOR EACH ROW EXECUTE PROCEDURE post_count_increment();
-  
+
 -- INDEX
 
 -- FORUMS
@@ -149,6 +149,12 @@ CREATE INDEX posts_thread_index
 
 CREATE INDEX posts_thread_id_index
   ON posts (thread, id);
+
+CREATE INDEX ON posts (thread, id, parent)
+  WHERE parent IS NULL;
+
+CREATE INDEX parent_tree
+  ON posts (parents DESC, id);
 --
 
 -- THREADS
