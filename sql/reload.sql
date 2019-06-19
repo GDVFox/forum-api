@@ -89,3 +89,39 @@ END $_$ LANGUAGE 'plpgsql';
 
 CREATE TRIGGER post_insert_trigger AFTER INSERT ON posts
   FOR EACH ROW EXECUTE PROCEDURE post_count_increment();
+
+-- INDEX
+
+-- FORUMS
+CREATE INDEX forum_cover_index
+  ON forums (id, slug, title, threads, posts, owner);
+--
+
+-- POSTS
+CREATE INDEX posts_thread_index
+  ON posts (thread);
+
+CREATE INDEX posts_thread_id_index
+  ON posts (thread, id);
+--
+
+-- THREADS
+CREATE INDEX threads_slug_id_index
+  ON threads (slug, id);
+
+CREATE UNIQUE INDEX threads_id_forum_index
+  ON threads (id, forum);
+
+CREATE UNIQUE INDEX thread_slug_forum_index
+  ON threads (slug, forum);
+
+CREATE UNIQUE INDEX threads_cover_index
+  ON threads (id, slug, title, message, votes, created, author, forum);
+--
+
+-- USERS
+CREATE INDEX ON users (nickname, email);
+
+CREATE INDEX users_cover_index
+  ON users (nickname, email, about, fullname);
+--

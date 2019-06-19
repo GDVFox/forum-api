@@ -25,3 +25,15 @@ END $_$ LANGUAGE 'plpgsql';
 
 CREATE TRIGGER thread_insert_trigger AFTER INSERT ON threads
   FOR EACH ROW EXECUTE PROCEDURE thread_count_increment();
+
+CREATE INDEX threads_slug_id_index
+  ON threads (slug, id);
+
+CREATE UNIQUE INDEX threads_id_forum_index
+  ON threads (id, forum);
+
+CREATE UNIQUE INDEX thread_slug_forum_index
+  ON threads (slug, forum);
+
+CREATE UNIQUE INDEX threads_cover_index
+  ON threads (id, slug, title, message, votes, created, author, forum);

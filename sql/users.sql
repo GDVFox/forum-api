@@ -11,3 +11,8 @@ CREATE TABLE users
     CONSTRAINT users_email_check
       CHECK ( email ~ '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$' )
 );
+
+CREATE INDEX ON users (nickname, email);
+
+CREATE INDEX users_cover_index
+  ON users (nickname, email, about, fullname);

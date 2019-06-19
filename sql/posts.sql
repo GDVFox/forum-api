@@ -22,3 +22,10 @@ END $_$ LANGUAGE 'plpgsql';
 
 CREATE TRIGGER post_insert_trigger AFTER INSERT ON posts
   FOR EACH ROW EXECUTE PROCEDURE post_count_increment();
+
+CREATE INDEX posts_thread_index
+  ON posts (thread);
+
+CREATE INDEX posts_thread_id_index
+  ON posts (thread, id);
+
